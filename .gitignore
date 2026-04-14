@@ -1,0 +1,16 @@
+# Binary
+gh-repo-inspector
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# Go build artifacts
+*.test
+*.out
+
+# Runtime state (saved clone path & history)
+# ~/.config/gh-repo-inspector/state.json  — not tracked here; lives outside repo
