@@ -16,59 +16,55 @@ import (
 type refreshState int
 
 const (
-	refreshStateSelect  refreshState = iota // choosing repos
-	refreshStateRunning                     // pulling in progress
-	refreshStateDone                        // finished
+	refreshStateDir      refreshState = iota // typing scan directory
+	refreshStateScanning                     // scanning in progress
+	refreshStateSelect                       // choosing repos to pull
+	refreshStateRunning                      // pulling
+	refreshStateDone                         // finished
 )
 
-// RefreshView lets the user select previously cloned repos and run git pull on them.
+// RefreshView scans a directory for git repos and runs git pull on selected ones.
 type RefreshView struct {
 	app            *App
-	records        []config.CloneRecord
+	scanDir        string
+	repos          []gh.LocalRepo
 	selected       map[int]bool
 	cursor         int
 	offset         int
 	height         int
 	state          refreshState
+	scanErr        error
 	results        []string
-	pendingRecords []config.CloneRecord
+	pendingRepos   []gh.LocalRepo
 	currentCmd     string
 	cfg            *config.Config
 	selectMenuOpen bool
 	selectMenuCur  int
 }
 
-type refreshMenuOption struct {
+type refreshSelectOption struct {
 	label  string
-	filter func(r config.CloneRecord) bool
+	filter func(r gh.LocalRepo) bool
 }
 
-var refreshMenuOptions = []refreshMenuOption{
-	{"All", func(r config.CloneRecord) bool { return true }},
-	{"Dir exists (pullable)", func(r config.CloneRecord) bool {
-		_, err := os.Stat(r.Path)
-		return err == nil
-	}},
-	{"Dir missing", func(r config.CloneRecord) bool {
-		_, err := os.Stat(r.Path)
-		return err != nil
-	}},
+var refreshSelectOptions = []refreshSelectOption{
+	{"All", func(r gh.LocalRepo) bool { return true }},
 	{"Clear selection", nil},
 }
 
 func NewRefreshView(app *App) *RefreshView {
 	cfg, _ := config.Load()
-	// Show most-recently-cloned first.
-	records := make([]config.CloneRecord, len(cfg.CloneHistory))
-	for i, r := range cfg.CloneHistory {
-		records[len(cfg.CloneHistory)-1-i] = r
+	dir, _ := os.UserHomeDir()
+	if cfg.LastClonePath != "" {
+		dir = cfg.LastClonePath
 	}
 	return &RefreshView{
 		app:      app,
-		records:  records,
+		scanDir:  dir,
 		selected: make(map[int]bool),
 		height:   app.height,
 		cfg:      cfg,
+		state:    refreshStateDir,
 	}
 }
 
@@ -95,24 +91,46 @@ func (rv *RefreshView) clampOffset() {
 	}
 }
 
+// scanMsg carries the result of scanning a directory for git repos.
+type scanMsg struct {
+	repos []gh.LocalRepo
+	err   error
+}
+
 // pullProgressMsg is sent when one git pull completes.
 type pullProgressMsg struct {
 	result  string
 	nextIdx int
 }
 
+func doScan(dir string) tea.Cmd {
+	return func() tea.Msg {
+		repos, err := gh.ScanLocalRepos(dir)
+		return scanMsg{repos: repos, err: err}
+	}
+}
+
 func (rv *RefreshView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case scanMsg:
+		rv.scanErr = msg.err
+		rv.repos = msg.repos
+		rv.selected = make(map[int]bool)
+		rv.cursor = 0
+		rv.offset = 0
+		rv.state = refreshStateSelect
+		return rv, nil
+
 	case pullProgressMsg:
 		if msg.result != "" {
 			rv.results = append(rv.results, msg.result)
 		}
-		if msg.nextIdx >= len(rv.pendingRecords) {
+		if msg.nextIdx >= len(rv.pendingRepos) {
 			rv.currentCmd = ""
 			rv.state = refreshStateDone
 			return rv, nil
 		}
-		r := rv.pendingRecords[msg.nextIdx]
+		r := rv.pendingRepos[msg.nextIdx]
 		rv.currentCmd = "git -C " + r.Path + " pull"
 		return rv, rv.pullOne(msg.nextIdx)
 
@@ -122,6 +140,10 @@ func (rv *RefreshView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch rv.state {
+		case refreshStateDir:
+			return rv.updateDir(msg)
+		case refreshStateScanning:
+			// block input while scanning
 		case refreshStateSelect:
 			return rv.updateSelect(msg)
 		case refreshStateDone:
@@ -133,20 +155,42 @@ func (rv *RefreshView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return rv, nil
 }
 
+func (rv *RefreshView) updateDir(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		return rv, PopScreen()
+	case "enter":
+		rv.state = refreshStateScanning
+		return rv, doScan(rv.scanDir)
+	case "backspace":
+		if len(rv.scanDir) > 0 {
+			rv.scanDir = rv.scanDir[:len(rv.scanDir)-1]
+		}
+	default:
+		if len(msg.Runes) > 0 {
+			rv.scanDir += string(msg.Runes)
+		}
+	}
+	return rv, nil
+}
+
 func (rv *RefreshView) updateSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if rv.selectMenuOpen {
 		return rv.updateSelectMenu(msg)
 	}
 	switch msg.String() {
 	case "esc", "q":
-		return rv, PopScreen()
+		// Return to directory prompt.
+		rv.state = refreshStateDir
+		rv.repos = nil
+		rv.selected = make(map[int]bool)
 	case "up", "k":
 		if rv.cursor > 0 {
 			rv.cursor--
 			rv.clampOffset()
 		}
 	case "down", "j":
-		if rv.cursor < len(rv.records)-1 {
+		if rv.cursor < len(rv.repos)-1 {
 			rv.cursor++
 			rv.clampOffset()
 		}
@@ -175,14 +219,14 @@ func (rv *RefreshView) updateSelectMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			rv.selectMenuCur--
 		}
 	case "down", "j":
-		if rv.selectMenuCur < len(refreshMenuOptions)-1 {
+		if rv.selectMenuCur < len(refreshSelectOptions)-1 {
 			rv.selectMenuCur++
 		}
 	case "enter", " ":
-		opt := refreshMenuOptions[rv.selectMenuCur]
+		opt := refreshSelectOptions[rv.selectMenuCur]
 		rv.selected = make(map[int]bool)
 		if opt.filter != nil {
-			for i, r := range rv.records {
+			for i, r := range rv.repos {
 				if opt.filter(r) {
 					rv.selected[i] = true
 				}
@@ -194,50 +238,43 @@ func (rv *RefreshView) updateSelectMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (rv *RefreshView) startPulling() tea.Cmd {
-	rv.pendingRecords = rv.selectedRecords()
+	rv.pendingRepos = rv.selectedRepos()
 	rv.results = nil
 	rv.currentCmd = ""
-	if len(rv.pendingRecords) == 0 {
+	if len(rv.pendingRepos) == 0 {
 		rv.state = refreshStateDone
 		return nil
 	}
-	rv.currentCmd = "git -C " + rv.pendingRecords[0].Path + " pull"
+	rv.currentCmd = "git -C " + rv.pendingRepos[0].Path + " pull"
 	return rv.pullOne(0)
 }
 
 func (rv *RefreshView) pullOne(idx int) tea.Cmd {
-	r := rv.pendingRecords[idx]
+	r := rv.pendingRepos[idx]
 	dryRun := rv.app.DryRun
-	cfg := rv.cfg
 	next := idx + 1
 
 	return func() tea.Msg {
-		if _, err := os.Stat(r.Path); err != nil {
-			line := fmt.Sprintf("⚠  %s — directory not found at %s, skipping", r.Name, r.Path)
-			return pullProgressMsg{result: line, nextIdx: next}
-		}
-
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		err := gh.PullRepo(ctx, r.Path, dryRun)
 		var line string
-		if dryRun {
+		switch {
+		case dryRun:
 			line = fmt.Sprintf("[DRY RUN] git -C %s pull", r.Path)
-		} else if err != nil {
+		case err != nil:
 			line = fmt.Sprintf("✗ %s: %v", r.Name, err)
-		} else {
+		default:
 			line = fmt.Sprintf("✓ %s  (%s)", r.Name, r.Path)
-			cfg.RecordPull(r.Name)
-			_ = cfg.Save()
 		}
 		return pullProgressMsg{result: line, nextIdx: next}
 	}
 }
 
-func (rv *RefreshView) selectedRecords() []config.CloneRecord {
-	var out []config.CloneRecord
-	for i, r := range rv.records {
+func (rv *RefreshView) selectedRepos() []gh.LocalRepo {
+	var out []gh.LocalRepo
+	for i, r := range rv.repos {
 		if rv.selected[i] {
 			out = append(out, r)
 		}
@@ -253,6 +290,10 @@ func (rv *RefreshView) View() string {
 	}
 
 	switch rv.state {
+	case refreshStateDir:
+		return title + banner + "\n" + rv.viewDir()
+	case refreshStateScanning:
+		return title + banner + fmt.Sprintf("\n\n  Scanning %s…", rv.scanDir)
 	case refreshStateSelect:
 		base := title + banner + "\n" + rv.viewSelect()
 		if rv.selectMenuOpen {
@@ -275,44 +316,47 @@ func (rv *RefreshView) View() string {
 	return ""
 }
 
+func (rv *RefreshView) viewDir() string {
+	prompt := fmt.Sprintf("\n  Directory to scan for git repos:\n\n  %s█\n\n", rv.scanDir)
+	note := StyleHelp.Render("  Scans immediate subdirectories for .git folders.")
+	help := "\n" + StyleHelp.Render("  enter scan  esc back")
+	return prompt + note + help
+}
+
 func (rv *RefreshView) viewSelect() string {
 	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("8"))
-	missingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	pulledStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 
-	if len(rv.records) == 0 {
-		return "\n  No clone history found. Use Clone Repos first.\n\n" +
-			StyleHelp.Render("  esc back")
+	if rv.scanErr != nil {
+		return fmt.Sprintf("\n  Error scanning %s:\n  %v\n\n%s",
+			rv.scanDir, rv.scanErr, StyleHelp.Render("  esc to try a different directory"))
+	}
+	if len(rv.repos) == 0 {
+		return fmt.Sprintf("\n  No git repos found in %s\n\n%s",
+			rv.scanDir, StyleHelp.Render("  esc to try a different directory"))
 	}
 
 	vh := rv.viewportHeight()
 	end := rv.offset + vh
-	if end > len(rv.records) {
-		end = len(rv.records)
+	if end > len(rv.repos) {
+		end = len(rv.repos)
 	}
 
-	header := headerStyle.Render(fmt.Sprintf("     %-28s %-38s %-8s %-10s %s",
-		"NAME", "PATH", "BRANCHES", "CLONED", "LAST PULL"))
+	header := headerStyle.Render(fmt.Sprintf("     %-28s %-16s %s",
+		"NAME", "BRANCH", "LAST COMMIT"))
 
 	var rows strings.Builder
 	for i := rv.offset; i < end; i++ {
-		r := rv.records[i]
+		r := rv.repos[i]
 
-		branches := "default"
-		if r.AllBranches {
-			branches = "all"
+		branch := r.Branch
+		if branch == "" {
+			branch = "?"
 		}
-
-		_, statErr := os.Stat(r.Path)
-		dirMissing := statErr != nil
-
-		var pulledInfo string
-		if r.LastPulledAt != nil {
-			pulledInfo = pulledStyle.Render(formatAge(*r.LastPulledAt))
-		} else {
-			pulledInfo = StyleHelp.Render("never")
+		lastCommit := r.LastCommit
+		if lastCommit == "" {
+			lastCommit = "unknown"
 		}
 
 		checkbox := "[ ]"
@@ -324,33 +368,24 @@ func (rv *RefreshView) viewSelect() string {
 			cur = cursorStyle.Render("❯ ")
 		}
 
-		namePart := truncate(r.Name, 28)
-		if dirMissing {
-			namePart = missingStyle.Render(namePart + " ✗")
-		}
-
-		line := fmt.Sprintf("%s%s %-28s %-38s %-8s %-10s %s",
+		line := fmt.Sprintf("%s%s %-28s %-16s %s",
 			cur, checkbox,
-			namePart,
-			truncate(r.Path, 38),
-			branches,
-			formatAge(r.ClonedAt),
-			pulledInfo,
+			truncate(r.Name, 28),
+			branch,
+			lastCommit,
 		)
-
 		if i == rv.cursor {
 			line = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("237")).Render(line)
 		}
 		rows.WriteString("\n" + line)
 	}
 
-	scrollInfo := fmt.Sprintf("%d-%d / %d", rv.offset+1, end, len(rv.records))
+	scrollInfo := fmt.Sprintf("%d-%d / %d  in %s", rv.offset+1, end, len(rv.repos), rv.scanDir)
 	selInfo := fmt.Sprintf("%d selected", len(rv.selected))
 	status := StyleTitle.Render(selInfo) + "  " + StyleHelp.Render(scrollInfo)
 
-	help := StyleHelp.Render("  space toggle  a select-group  enter pull selected  D dry-run  esc back")
-	note := StyleHelp.Render("  ✗ = directory missing on disk")
-	return "\n" + header + "\n" + status + rows.String() + "\n\n" + note + "\n" + help
+	help := StyleHelp.Render("  space toggle  a select-all  enter pull selected  D dry-run  esc rescan")
+	return "\n" + header + "\n" + status + rows.String() + "\n\n" + help
 }
 
 func (rv *RefreshView) viewSelectMenu() string {
@@ -365,7 +400,7 @@ func (rv *RefreshView) viewSelectMenu() string {
 
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Select group:") + "\n")
-	for i, opt := range refreshMenuOptions {
+	for i, opt := range refreshSelectOptions {
 		cur := "  "
 		label := opt.label
 		if i == rv.selectMenuCur {

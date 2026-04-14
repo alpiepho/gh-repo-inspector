@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -152,6 +155,42 @@ func CloneRepo(ctx context.Context, url, destDir string, allBranches, dryRun boo
 		return fmt.Errorf("git clone: %s: %w", out, err)
 	}
 	return nil
+}
+
+// LocalRepo is a git repository discovered on the local filesystem.
+type LocalRepo struct {
+	Name       string
+	Path       string
+	Branch     string
+	LastCommit string // relative time, e.g. "3 days ago"
+}
+
+// ScanLocalRepos finds immediate subdirectories of dir that contain a .git folder.
+// It reads the current branch and last commit time for each.
+func ScanLocalRepos(dir string) ([]LocalRepo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read dir: %w", err)
+	}
+	var repos []LocalRepo
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
+			continue
+		}
+		repo := LocalRepo{Name: e.Name(), Path: path}
+		if out, err := exec.Command("git", "-C", path, "branch", "--show-current").Output(); err == nil {
+			repo.Branch = strings.TrimSpace(string(out))
+		}
+		if out, err := exec.Command("git", "-C", path, "log", "-1", "--format=%ar").Output(); err == nil {
+			repo.LastCommit = strings.TrimSpace(string(out))
+		}
+		repos = append(repos, repo)
+	}
+	return repos, nil
 }
 
 // PullRepo runs `git pull` inside dir.
