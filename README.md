@@ -126,6 +126,52 @@ go test ./...
 
 ---
 
-## License
+## Troubleshooting
+
+### Deleting repos fails with HTTP 403 / "delete_repo scope"
+
+```
+error: gh repo delete: HTTP 403: Must have admin rights to Repository.
+This API operation needs the "delete_repo" scope. To request it, run:
+  gh auth refresh -h github.com -s delete_repo
+```
+
+The `gh` CLI token does not include the `delete_repo` permission by default. Fix it once:
+
+```bash
+gh auth refresh -h github.com -s delete_repo
+```
+
+A browser window will open to confirm. After that, deletes will work permanently.
+
+> **Note:** You can only delete repos you own or where you have admin rights. Repos owned
+> by another account or organisation will still fail with 403 even after refreshing the scope.
+
+---
+
+### Making a repo private fails with "accept-visibility-change-consequences"
+
+Older versions of `gh` (< 2.4) do not support the
+`--accept-visibility-change-consequences` flag. Upgrade `gh`:
+
+```bash
+brew upgrade gh   # macOS
+```
+
+---
+
+### Operations log
+
+All mutating operations (delete, make-private, clone, pull) are appended to
+`operations.log` in the directory you run the binary from. Check it for full
+error messages that were truncated in the TUI:
+
+```bash
+cat operations.log
+```
+
+---
+
+
 
 MIT
