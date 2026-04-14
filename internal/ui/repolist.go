@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/al/gh-repo-inspector/internal/gh"
+	"github.com/al/gh-repo-inspector/internal/oplog"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -198,6 +199,19 @@ func (rl *RepoList) confirmAction(action string) tea.Cmd {
 		case "private":
 			err = gh.SetPrivate(repo.URL, rl.app.DryRun)
 		}
+		// Log the operation.
+		opName := "DELETE"
+		if action == "private" {
+			opName = "MAKE-PRIVATE"
+		}
+		logResult := "success"
+		switch {
+		case rl.app.DryRun:
+			logResult = "[DRY-RUN]"
+		case err != nil:
+			logResult = "error: " + err.Error()
+		}
+		oplog.Write(opName, repo.Name, logResult)
 		if err != nil {
 			rl.err = err.Error()
 			return PopScreen()

@@ -1,6 +1,9 @@
 # Binary
 gh-repo-inspector
 
+# Operation log (written next to the binary at runtime)
+operations.log
+
 # macOS
 .DS_Store
 

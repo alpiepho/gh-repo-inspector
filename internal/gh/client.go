@@ -129,7 +129,9 @@ func SetPrivate(fullName string, dryRun bool) error {
 	if dryRun {
 		return nil
 	}
-	cmd := exec.Command("gh", "repo", "edit", fullName, "--visibility", "private")
+	cmd := exec.Command("gh", "repo", "edit", fullName,
+		"--visibility", "private",
+		"--accept-visibility-change-consequences")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("gh repo edit: %s: %w", out, err)
 	}
