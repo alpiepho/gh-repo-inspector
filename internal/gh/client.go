@@ -154,7 +154,19 @@ func CloneRepo(ctx context.Context, url, destDir string, allBranches, dryRun boo
 	return nil
 }
 
-// FormatSize converts KB to a human-readable string.
+// PullRepo runs `git pull` inside dir.
+// In dry-run mode it returns nil without acting.
+// ctx can carry a deadline to prevent hangs.
+func PullRepo(ctx context.Context, dir string, dryRun bool) error {
+	if dryRun {
+		return nil
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "pull")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git pull: %s: %w", out, err)
+	}
+	return nil
+}
 func FormatSize(kb int) string {
 	switch {
 	case kb >= 1024*1024:

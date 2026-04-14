@@ -9,10 +9,11 @@ import (
 
 // CloneRecord tracks a completed clone operation.
 type CloneRecord struct {
-	Name        string    `json:"name"`
-	Path        string    `json:"path"`
-	ClonedAt    time.Time `json:"clonedAt"`
-	AllBranches bool      `json:"allBranches"`
+	Name         string     `json:"name"`
+	Path         string     `json:"path"`
+	ClonedAt     time.Time  `json:"clonedAt"`
+	AllBranches  bool       `json:"allBranches"`
+	LastPulledAt *time.Time `json:"lastPulledAt,omitempty"`
 }
 
 // Config is the persistent application state.
@@ -86,4 +87,15 @@ func (c *Config) FindClone(name string) (CloneRecord, bool) {
 		}
 	}
 	return CloneRecord{}, false
+}
+
+// RecordPull updates the LastPulledAt timestamp for a named repo.
+func (c *Config) RecordPull(name string) {
+	now := time.Now()
+	for i, r := range c.CloneHistory {
+		if r.Name == name {
+			c.CloneHistory[i].LastPulledAt = &now
+			return
+		}
+	}
 }

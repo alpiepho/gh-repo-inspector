@@ -19,6 +19,7 @@ var menuItems = []menuItem{
 	{"Review Public Repos", "Review public repos — make private"},
 	{"Review by Age", "Oldest repos first — delete stale ones"},
 	{"Clone Repos", "Select repos to clone locally"},
+	{"Refresh Clones", "Run git pull on previously cloned repos"},
 	{"Test Setup Guide", "Step-by-step guide for creating test repos"},
 }
 
@@ -78,7 +79,9 @@ func (m *Menu) selectItem() tea.Cmd {
 		return PushScreen(NewRepoList(m.app, m.repos, FilterAll, ModeDeleteOldest))
 	case 4: // Clone
 		return PushScreen(NewCloneView(m.app, m.repos))
-	case 5: // Test setup
+	case 5: // Refresh clones
+		return PushScreen(NewRefreshView(m.app))
+	case 6: // Test setup
 		return PushScreen(NewTestSetup(m.app))
 	}
 	return nil
