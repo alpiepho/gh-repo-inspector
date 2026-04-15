@@ -16,4 +16,5 @@ operations.log
 *.out
 
 # Runtime state (saved clone path & history)
-# ~/.config/gh-repo-inspector/state.json  — not tracked here; lives outside repo
+state.json
+operations.log
