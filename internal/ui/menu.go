@@ -64,12 +64,20 @@ func (m *Menu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.selectItem()
 			}
 		default:
-			// Number shortcuts: 1–N jump directly to that item.
 			if len(msg.Runes) == 1 {
-				n := int(msg.Runes[0] - '1')
-				if n >= 0 && n < len(menuItems) && !m.loading {
-					m.cursor = n
-					return m, m.selectItem()
+				switch msg.Runes[0] {
+				case '0': // Reload repo list
+					m.loading = true
+					m.repos = nil
+					m.repoErr = nil
+					return m, fetchRepos
+				default:
+					// Number shortcuts: 1–N jump directly to that item.
+					n := int(msg.Runes[0] - '1')
+					if n >= 0 && n < len(menuItems) && !m.loading {
+						m.cursor = n
+						return m, m.selectItem()
+					}
 				}
 			}
 		}
@@ -120,6 +128,9 @@ func (m *Menu) View() string {
 	itemStyle := lipgloss.NewStyle().Padding(0, 2)
 	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).PaddingLeft(4)
+	reloadStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Padding(0, 2)
+
+	reloadLabel := reloadStyle.Render("0. Reload repo list from GitHub")
 
 	var items string
 	for i, item := range menuItems {
@@ -136,7 +147,7 @@ func (m *Menu) View() string {
 		}
 	}
 
-	help := "\n\n" + StyleHelp.Render("  ↑/k up  ↓/j down  1-8 jump  enter select  q quit")
+	help := "\n\n" + StyleHelp.Render("  ↑/k up  ↓/j down  0 reload  1-8 jump  enter select  q quit")
 
-	return title + banner + "\n" + status + "\n" + items + help
+	return title + banner + "\n" + status + "\n" + reloadLabel + "\n" + items + help
 }
