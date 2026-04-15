@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -25,11 +24,7 @@ type Config struct {
 }
 
 func configPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "gh-repo-inspector", "state.json"), nil
+	return "state.json", nil
 }
 
 // Load reads the config from disk. Returns an empty config if the file doesn't exist.
@@ -56,9 +51,6 @@ func Load() (*Config, error) {
 func (c *Config) Save() error {
 	path, err := configPath()
 	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(c, "", "  ")
