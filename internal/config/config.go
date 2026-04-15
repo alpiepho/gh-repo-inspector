@@ -20,6 +20,8 @@ type CloneRecord struct {
 type Config struct {
 	LastClonePath string        `json:"lastClonePath"`
 	CloneHistory  []CloneRecord `json:"cloneHistory"`
+	GitLabURL     string        `json:"gitLabURL,omitempty"`
+	GitLabToken   string        `json:"gitLabToken,omitempty"`
 }
 
 func configPath() (string, error) {

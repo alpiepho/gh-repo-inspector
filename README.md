@@ -17,6 +17,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Glo
 | **6 – Clone** | Multi-select repos and clone locally; track what's already cloned |
 | **7 – Refresh Clones** | Scan a local directory for git repos and run `git pull` on selected ones |
 | **8 – Test Setup** | Step-by-step guide for creating test repos via the `gh` CLI |
+| **9 – Migrate to GitLab** | Push locally cloned repos to a local GitLab instance |
 
 ### Clone extras
 - Select by group: All / Forks only / Public (non-fork) / Private (non-fork) / Clear
@@ -124,13 +125,47 @@ gh-repo-inspector [--dry-run | -n]
 | `a` | Select all / deselect all |
 | `p` | Start pull on selected repos |
 
+### Migrate to GitLab (option 9)
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Switch between URL and token fields |
+| `Enter` | Confirm field / advance to next step |
+| `Space` | Toggle repo selection |
+| `a` | Select all / deselect all |
+| `s` | Skip conflicting repo (already exists on GitLab) |
+| `f` | Force push conflicting repo |
+
+---
+
+## GitLab Migration Setup
+
+Option 9 pushes locally cloned repos to a self-hosted GitLab.
+
+### Steps
+1. Open your GitLab in a browser (e.g. `http://10.0.0.60:8929`)
+2. Click your avatar (top-right) → **Edit profile** → **Access Tokens**
+3. Create a new token with scopes: **`api`** and **`write_repository`**
+4. Copy the token
+5. Open the app, press **9**, and paste the token into the config screen
+6. The app fetches your GitLab username automatically and uses it as the push namespace
+
+### What happens during migration
+- The app scans a local directory you choose for git repos (`.git` folders)
+- You multi-select which repos to push
+- If any already exist on GitLab, you are prompted per-repo to **skip** or **force push**
+- Each repo is created on GitLab (if new), a `gitlab` remote is added locally, and `git push --all` is run
+- Credentials are embedded in the remote URL using your PAT so no password prompts appear
+- All results are logged to `operations.log`
+
 ---
 
 ## Architecture
 
 ```
 internal/gh/client.go      — all gh CLI / git subprocess calls
-internal/config/config.go  — persists last clone path & clone history
+internal/gitlab/client.go  — GitLab REST API client (check/create repo, push auth)
+internal/config/config.go  — persists last clone path, clone history, GitLab settings
 internal/oplog/oplog.go    — append-only operations log (./operations.log)
 internal/ui/app.go         — Bubble Tea root model; navigation stack
 internal/ui/menu.go        — main menu with number shortcuts
@@ -138,6 +173,7 @@ internal/ui/repolist.go    — shared sortable/filterable repo table (options 1�
 internal/ui/confirm.go     — dry-run-aware confirmation dialog
 internal/ui/clone.go       — multi-select clone picker with live progress
 internal/ui/refresh.go     — directory-scan git pull view
+internal/ui/migrate.go     — GitLab migration view
 internal/ui/testsetup.go   — paginated test-repo setup guide
 internal/ui/styles.go      — shared Lip Gloss styles and navigation commands
 main.go                    — CLI entry point

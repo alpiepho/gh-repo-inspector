@@ -223,6 +223,38 @@ func PullRepo(ctx context.Context, dir string, dryRun bool) error {
 	}
 	return nil
 }
+// PushToRemote adds (or updates) a remote named "gitlab" in the local repo at
+// localDir and pushes all branches to remoteURL.
+// In dry-run mode it prints the commands without executing them.
+func PushToRemote(ctx context.Context, localDir, remoteURL string, force, dryRun bool) (string, error) {
+	// Build the command string for display.
+	pushArgs := []string{"-C", localDir, "push", "--all", "gitlab"}
+	if force {
+		pushArgs = append(pushArgs, "--force")
+	}
+	cmdStr := "git " + strings.Join(pushArgs, " ")
+
+	if dryRun {
+		return "[dry-run] " + cmdStr, nil
+	}
+
+	// Set or add the remote.
+	setURL := exec.CommandContext(ctx, "git", "-C", localDir, "remote", "set-url", "gitlab", remoteURL)
+	if out, err := setURL.CombinedOutput(); err != nil {
+		// remote doesn't exist yet — add it
+		add := exec.CommandContext(ctx, "git", "-C", localDir, "remote", "add", "gitlab", remoteURL)
+		if out2, err2 := add.CombinedOutput(); err2 != nil {
+			return "", fmt.Errorf("git remote: %s %s: %w", out, out2, err2)
+		}
+	}
+
+	push := exec.CommandContext(ctx, "git", pushArgs...)
+	if out, err := push.CombinedOutput(); err != nil {
+		return cmdStr, fmt.Errorf("%s: %w", strings.TrimSpace(string(out)), err)
+	}
+	return cmdStr, nil
+}
+
 func FormatSize(kb int) string {
 	switch {
 	case kb >= 1024*1024:

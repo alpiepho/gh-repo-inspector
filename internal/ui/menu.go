@@ -22,6 +22,7 @@ var menuItems = []menuItem{
 	{"Clone Repos", "Select repos to clone locally"},
 	{"Refresh Clones", "Run git pull on previously cloned repos"},
 	{"Test Setup Guide", "Step-by-step guide for creating test repos"},
+	{"Migrate to GitLab", "Push local repos to your local GitLab instance"},
 }
 
 // Menu is the main menu model.
@@ -103,6 +104,8 @@ func (m *Menu) selectItem() tea.Cmd {
 		return PushScreen(NewRefreshView(m.app))
 	case 7: // Test setup
 		return PushScreen(NewTestSetup(m.app))
+	case 8: // Migrate to GitLab
+		return PushScreen(NewMigrateView(m.app))
 	}
 	return nil
 }
@@ -147,7 +150,7 @@ func (m *Menu) View() string {
 		}
 	}
 
-	help := "\n\n" + StyleHelp.Render("  ↑/k up  ↓/j down  0 reload  1-8 jump  enter select  q quit")
+	help := "\n\n" + StyleHelp.Render("  ↑/k up  ↓/j down  0 reload  1-9 jump  enter select  q quit")
 
 	return title + banner + "\n" + status + "\n" + reloadLabel + "\n" + items + help
 }
