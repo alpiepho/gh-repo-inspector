@@ -17,10 +17,11 @@ type CloneRecord struct {
 
 // Config is the persistent application state.
 type Config struct {
-	LastClonePath string        `json:"lastClonePath"`
-	CloneHistory  []CloneRecord `json:"cloneHistory"`
-	GitLabURL     string        `json:"gitLabURL,omitempty"`
-	GitLabToken   string        `json:"gitLabToken,omitempty"`
+	LastClonePath   string        `json:"lastClonePath"`
+	LastMigratePath string        `json:"lastMigratePath,omitempty"`
+	CloneHistory    []CloneRecord `json:"cloneHistory"`
+	GitLabURL       string        `json:"gitLabURL,omitempty"`
+	GitLabToken     string        `json:"gitLabToken,omitempty"`
 }
 
 func configPath() (string, error) {

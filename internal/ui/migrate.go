@@ -99,7 +99,9 @@ var migrateSelectOptions = []migrateSelectOption{
 func NewMigrateView(app *App, ghRepoList []gh.Repo) *MigrateView {
 	cfg, _ := config.Load()
 	dir, _ := os.UserHomeDir()
-	if cfg.LastClonePath != "" {
+	if cfg.LastMigratePath != "" {
+		dir = cfg.LastMigratePath
+	} else if cfg.LastClonePath != "" {
 		dir = cfg.LastClonePath
 	}
 	// Build name → isPrivate lookup from GitHub repo list.
@@ -268,6 +270,8 @@ func (mv *MigrateView) updateDir(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		mv.state = migrateStateConfig
 	case "enter":
 		mv.state = migrateStateScanning
+		mv.cfg.LastMigratePath = strings.TrimSpace(mv.scanDir)
+		_ = mv.cfg.Save()
 		return mv, doScan(mv.scanDir)
 	case "backspace":
 		if len(mv.scanDir) > 0 {
@@ -484,7 +488,7 @@ func (mv *MigrateView) pushOne(idx int) tea.Cmd {
 				nextIdx: next,
 			}
 		}
-		oplog.Write("GITLAB-PUSH", r.Name, "ok → "+remoteURL)
+		oplog.Write("GITLAB-PUSH", r.Name, "ok → "+cleanURL)
 		visibility := "public"
 		if isPrivate {
 			visibility = "private"
