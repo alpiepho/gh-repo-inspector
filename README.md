@@ -7,14 +7,16 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Glo
 
 ## Features
 
-| Phase | What it does |
-|-------|-------------|
+| Option | What it does |
+|--------|-------------|
 | **1 – Inspect** | Browse all repos: name, description, last commit, visibility, fork status, branch count, disk size |
 | **2 – Forks** | Review forks and selectively delete them |
-| **3 – Public** | Review public repos and change visibility to private |
-| **4 – By Age** | Browse repos oldest-first and selectively delete them |
-| **5 – Clone** | Multi-select repos and clone locally; track what's already cloned |
-| **Test Setup** | Step-by-step guide for creating test repos via the `gh` CLI |
+| **3 – Public → Private** | Review public repos and change visibility to private |
+| **4 – Private → Public** | Review private repos and change visibility to public |
+| **5 – By Age** | Browse repos oldest-first and selectively delete them |
+| **6 – Clone** | Multi-select repos and clone locally; track what's already cloned |
+| **7 – Refresh Clones** | Scan a local directory for git repos and run `git pull` on selected ones |
+| **8 – Test Setup** | Step-by-step guide for creating test repos via the `gh` CLI |
 
 ### Clone extras
 - Select by group: All / Forks only / Public (non-fork) / Private (non-fork) / Clear
@@ -25,7 +27,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Glo
 - Tracks clone history (date, path, branch mode) and highlights already-cloned repos
 
 ### Dry-run mode
-All mutating operations (delete, make-private, clone) can be previewed without side effects:
+All mutating operations (delete, make-private, make-public, clone) can be previewed without side effects:
 
 ```
 gh-repo-inspector --dry-run
@@ -65,25 +67,46 @@ go run . [--dry-run]
 gh-repo-inspector [--dry-run | -n]
 ```
 
-### Global key bindings
+### Main menu key bindings
 
 | Key | Action |
 |-----|--------|
 | `↑` / `k` | Move up |
 | `↓` / `j` | Move down |
-| `Enter` | Select / confirm |
-| `Esc` / `q` | Back / quit |
-| `D` | Toggle dry-run mode |
+| `0` | Reload repo list from GitHub |
+| `1`–`8` | Jump directly to that option |
+| `Enter` | Select |
+| `q` | Quit |
 
-### Inspect (phase 1)
+### Global key bindings (inside any view)
 
 | Key | Action |
 |-----|--------|
-| `↑↓` | Scroll |
+| `↑` / `k` | Move up |
+| `↓` / `j` | Move down |
+| `Esc` | Back |
+| `D` | Toggle dry-run mode |
+
+### Inspect (option 1)
+
+| Key | Action |
+|-----|--------|
 | `s` | Cycle sort column |
 | `f` | Toggle filter (all / forks / public / private) |
 
-### Clone (phase 5)
+### Review Forks / By Age (options 2, 5)
+
+| Key | Action |
+|-----|--------|
+| `d` | Delete selected repo |
+
+### Review Public / Private repos (options 3, 4)
+
+| Key | Action |
+|-----|--------|
+| `p` | Make selected repo private / public |
+
+### Clone (option 6)
 
 | Key | Action |
 |-----|--------|
@@ -92,6 +115,15 @@ gh-repo-inspector [--dry-run | -n]
 | `b` | Toggle branch mode (default / all) |
 | `Enter` | Proceed to destination prompt |
 
+### Refresh Clones (option 7)
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Confirm directory / start scan |
+| `Space` | Toggle repo selection |
+| `a` | Select all / deselect all |
+| `p` | Start pull on selected repos |
+
 ---
 
 ## Architecture
@@ -99,11 +131,13 @@ gh-repo-inspector [--dry-run | -n]
 ```
 internal/gh/client.go      — all gh CLI / git subprocess calls
 internal/config/config.go  — persists last clone path & clone history
+internal/oplog/oplog.go    — append-only operations log (./operations.log)
 internal/ui/app.go         — Bubble Tea root model; navigation stack
-internal/ui/menu.go        — main menu
-internal/ui/repolist.go    — shared sortable/filterable repo table (phases 1–4)
+internal/ui/menu.go        — main menu with number shortcuts
+internal/ui/repolist.go    — shared sortable/filterable repo table (options 1–5)
 internal/ui/confirm.go     — dry-run-aware confirmation dialog
 internal/ui/clone.go       — multi-select clone picker with live progress
+internal/ui/refresh.go     — directory-scan git pull view
 internal/ui/testsetup.go   — paginated test-repo setup guide
 internal/ui/styles.go      — shared Lip Gloss styles and navigation commands
 main.go                    — CLI entry point
@@ -149,7 +183,7 @@ A browser window will open to confirm. After that, deletes will work permanently
 
 ---
 
-### Making a repo private fails with "accept-visibility-change-consequences"
+### Making a repo private/public fails with "accept-visibility-change-consequences"
 
 Older versions of `gh` (< 2.4) do not support the
 `--accept-visibility-change-consequences` flag. Upgrade `gh`:
@@ -162,7 +196,7 @@ brew upgrade gh   # macOS
 
 ### Operations log
 
-All mutating operations (delete, make-private, clone, pull) are appended to
+All mutating operations (delete, make-private, make-public, clone, pull) are appended to
 `operations.log` in the directory you run the binary from. Check it for full
 error messages that were truncated in the TUI:
 
@@ -171,7 +205,5 @@ cat operations.log
 ```
 
 ---
-
-
 
 MIT
