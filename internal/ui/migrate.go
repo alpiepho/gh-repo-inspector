@@ -350,21 +350,23 @@ func (mv *MigrateView) updateSelectMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // checkConflicts fires a tea.Cmd that queries GitLab for each selected repo.
 func (mv *MigrateView) checkConflicts() tea.Cmd {
 	selected := mv.selectedRepos()
-	url := mv.gitLabURL
+	glURL := mv.gitLabURL
 	token := mv.gitLabToken
 
 	return func() tea.Msg {
-		gl := gitlab.New(url, token)
+		gl := gitlab.New(glURL, token)
 		username, err := gl.GetCurrentUser()
 		if err != nil {
-			return migrateCheckMsg{err: fmt.Errorf("Cannot reach GitLab (%s): %v", url, err)}
+			msg := fmt.Sprintf("Cannot reach GitLab (%s): %v", glURL, err)
+			oplog.Write("GITLAB-CHECK", glURL, msg)
+			return migrateCheckMsg{err: fmt.Errorf("%s", msg)}
 		}
 
 		var conflicts []conflictRepo
 		for _, r := range selected {
 			_, exists, err := gl.CheckRepo(username, r.Name)
 			if err != nil {
-				// treat check errors as non-conflicting; push will surface the real error
+				oplog.Write("GITLAB-CHECK", r.Name, fmt.Sprintf("check error: %v", err))
 				continue
 			}
 			if exists {
@@ -374,13 +376,6 @@ func (mv *MigrateView) checkConflicts() tea.Cmd {
 				})
 			}
 		}
-		// Store username for push phase (we pass it back via a wrapper; use a shared field via closure).
-		// We use a side-channel: write to a temp file is bad; instead we return username in the err field... no.
-		// Cleanest: embed username in the first conflict entry's desc.
-		// Actually: add username as a special first-entry sentinel.
-		// Better: just return username via a separate msg type.
-		// Let's use a lightweight approach: prepend a sentinel.
-		_ = username // will be re-fetched during push; acceptable for small PAT overhead
 		return migrateCheckMsg{conflicts: conflicts}
 	}
 }

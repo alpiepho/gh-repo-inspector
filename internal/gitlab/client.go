@@ -123,18 +123,26 @@ func (c *Client) CreateRepo(name, description string, private bool) (string, err
 }
 
 // RepoHTTPURL returns the HTTP clone URL with the PAT embedded for use as a git remote push URL.
+// Uses url.URL so any special characters in the token are correctly percent-encoded.
 func (c *Client) RepoHTTPURL(namespace, name string) string {
-	// Embed token in URL so git doesn't prompt for credentials.
-	base := strings.TrimPrefix(strings.TrimPrefix(c.BaseURL, "https://"), "http://")
-	scheme := "http"
-	if strings.HasPrefix(c.BaseURL, "https://") {
-		scheme = "https"
+	u, err := url.Parse(c.BaseURL)
+	if err != nil {
+		// Fallback to simple string construction if parse fails.
+		return c.BaseURL + "/" + namespace + "/" + name + ".git"
 	}
-	return fmt.Sprintf("%s://oauth2:%s@%s/%s/%s.git", scheme, c.Token, base, namespace, name)
+	u.User = url.UserPassword("oauth2", c.Token)
+	u.Path = "/" + namespace + "/" + name + ".git"
+	return u.String()
 }
 
 // CleanRepoURL returns the HTTP clone URL WITHOUT embedded credentials,
 // safe to store in .git/config.
 func (c *Client) CleanRepoURL(namespace, name string) string {
-	return fmt.Sprintf("%s/%s/%s.git", c.BaseURL, namespace, name)
+	u, err := url.Parse(c.BaseURL)
+	if err != nil {
+		return c.BaseURL + "/" + namespace + "/" + name + ".git"
+	}
+	u.User = nil
+	u.Path = "/" + namespace + "/" + name + ".git"
+	return u.String()
 }
