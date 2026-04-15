@@ -18,10 +18,15 @@ type Client struct {
 	http    *http.Client
 }
 
-// New creates a Client. baseURL trailing slash is stripped.
+// New creates a Client. baseURL trailing slash is stripped and an http:// scheme
+// is added if the URL has no scheme (e.g. "10.0.0.60:8929" → "http://10.0.0.60:8929").
 func New(baseURL, token string) *Client {
+	u := strings.TrimRight(baseURL, "/")
+	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+		u = "http://" + u
+	}
 	return &Client{
-		BaseURL: strings.TrimRight(baseURL, "/"),
+		BaseURL: u,
 		Token:   token,
 		http:    &http.Client{Timeout: 15 * time.Second},
 	}
