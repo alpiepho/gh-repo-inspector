@@ -75,7 +75,7 @@ gh-repo-inspector [--dry-run | -n]
 | `↑` / `k` | Move up |
 | `↓` / `j` | Move down |
 | `0` | Reload repo list from GitHub |
-| `1`–`8` | Jump directly to that option |
+| `1`–`9` | Jump directly to that option |
 | `Enter` | Select |
 | `q` | Quit |
 
@@ -168,7 +168,7 @@ Both `state.json` and `operations.log` are written to the **same directory you r
 
 | File | Contents |
 |------|----------|
-| `state.json` | Last clone path, clone history, GitLab URL and PAT |
+| `state.json` | Last clone/migrate path, clone history, GitLab URL and PAT |
 | `operations.log` | Timestamped log of all mutating operations |
 
 > **Security note:** The PAT is stored in plaintext in `state.json`. Keep this file private
@@ -177,11 +177,12 @@ Both `state.json` and `operations.log` are written to the **same directory you r
 
 ### What happens during migration
 
-- The app scans a local directory you choose for git repos (`.git` folders)
+- The app scans a local directory you choose for git repos (`.git` folders); your last-used directory is remembered
 - You multi-select which repos to push
 - If any already exist on GitLab, you are prompted per-repo to **skip** (`s`) or **force push** (`f`)
 - Each new repo is created on GitLab automatically, a `gitlab` remote is added to the local clone, and `git push --all` is run
-- Credentials are embedded in the remote URL using your PAT so no password prompts appear
+- The PAT is used only for the push and is **stripped from `.git/config`** afterwards — the stored remote URL contains no credentials
+- You can enter the GitLab URL with or without the `http://` scheme (e.g. `10.0.0.60:8929` works)
 - All results are logged to `operations.log`
 
 ---
