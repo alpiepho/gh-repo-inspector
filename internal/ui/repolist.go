@@ -16,9 +16,10 @@ import (
 type Filter int
 
 const (
-	FilterAll    Filter = iota
+	FilterAll     Filter = iota
 	FilterForks
 	FilterPublic
+	FilterPrivate
 )
 
 // Mode controls which actions are available.
@@ -28,6 +29,7 @@ const (
 	ModeInspect      Mode = iota // read-only
 	ModeDelete                   // d = delete
 	ModePrivate                  // p = make private
+	ModePublic                   // p = make public
 	ModeDeleteOldest             // d = delete, sorted oldest first
 )
 
@@ -73,6 +75,10 @@ func (rl *RepoList) applyFilter() {
 			}
 		case FilterPublic:
 			if r.IsPrivate {
+				continue
+			}
+		case FilterPrivate:
+			if !r.IsPrivate {
 				continue
 			}
 		}
@@ -177,6 +183,9 @@ func (rl *RepoList) updateNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if rl.mode == ModePrivate {
 			return rl, rl.confirmAction("private")
 		}
+		if rl.mode == ModePublic {
+			return rl, rl.confirmAction("public")
+		}
 	case "D":
 		rl.app.DryRun = !rl.app.DryRun
 	}
@@ -198,12 +207,15 @@ func (rl *RepoList) confirmAction(action string) tea.Cmd {
 			err = gh.DeleteRepo(repo.URL, rl.app.DryRun)
 		case "private":
 			err = gh.SetPrivate(repo.URL, rl.app.DryRun)
+		case "public":
+			err = gh.SetPublic(repo.URL, rl.app.DryRun)
 		}
 		// Log the operation.
-		opName := "DELETE"
-		if action == "private" {
-			opName = "MAKE-PRIVATE"
-		}
+		opName := map[string]string{
+			"delete":  "DELETE",
+			"private": "MAKE-PRIVATE",
+			"public":  "MAKE-PUBLIC",
+		}[action]
 		logResult := "success"
 		switch {
 		case rl.app.DryRun:
@@ -324,6 +336,8 @@ func (rl *RepoList) modeTitle() string {
 		return "Review Forks"
 	case ModePrivate:
 		return "Review Public Repos"
+	case ModePublic:
+		return "Review Private Repos"
 	case ModeDeleteOldest:
 		return "Review by Age (Oldest First)"
 	default:
@@ -338,6 +352,8 @@ func (rl *RepoList) helpBar() string {
 		base = "d delete  " + base
 	case ModePrivate:
 		base = "p make-private  " + base
+	case ModePublic:
+		base = "p make-public  " + base
 	}
 	return StyleHelp.Render("  " + base)
 }

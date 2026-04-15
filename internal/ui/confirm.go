@@ -65,6 +65,8 @@ func (c *Confirm) actionLabel() string {
 		return "DELETE"
 	case "private":
 		return "make PRIVATE"
+	case "public":
+		return "make PUBLIC"
 	default:
 		return c.action
 	}

@@ -17,6 +17,7 @@ var menuItems = []menuItem{
 	{"Inspect All Repos", "Browse all repos with full metadata"},
 	{"Review Forks", "Review forked repos — delete unwanted ones"},
 	{"Review Public Repos", "Review public repos — make private"},
+	{"Review Private Repos", "Review private repos — make public"},
 	{"Review by Age", "Oldest repos first — delete stale ones"},
 	{"Clone Repos", "Select repos to clone locally"},
 	{"Refresh Clones", "Run git pull on previously cloned repos"},
@@ -62,6 +63,15 @@ func (m *Menu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.loading {
 				return m, m.selectItem()
 			}
+		default:
+			// Number shortcuts: 1–N jump directly to that item.
+			if len(msg.Runes) == 1 {
+				n := int(msg.Runes[0] - '1')
+				if n >= 0 && n < len(menuItems) && !m.loading {
+					m.cursor = n
+					return m, m.selectItem()
+				}
+			}
 		}
 	}
 	return m, nil
@@ -73,15 +83,17 @@ func (m *Menu) selectItem() tea.Cmd {
 		return PushScreen(NewRepoList(m.app, m.repos, FilterAll, ModeInspect))
 	case 1: // Forks
 		return PushScreen(NewRepoList(m.app, m.repos, FilterForks, ModeDelete))
-	case 2: // Public
+	case 2: // Public → make private
 		return PushScreen(NewRepoList(m.app, m.repos, FilterPublic, ModePrivate))
-	case 3: // By age
+	case 3: // Private → make public
+		return PushScreen(NewRepoList(m.app, m.repos, FilterPrivate, ModePublic))
+	case 4: // By age
 		return PushScreen(NewRepoList(m.app, m.repos, FilterAll, ModeDeleteOldest))
-	case 4: // Clone
+	case 5: // Clone
 		return PushScreen(NewCloneView(m.app, m.repos))
-	case 5: // Refresh clones
+	case 6: // Refresh clones
 		return PushScreen(NewRefreshView(m.app))
-	case 6: // Test setup
+	case 7: // Test setup
 		return PushScreen(NewTestSetup(m.app))
 	}
 	return nil
@@ -111,11 +123,12 @@ func (m *Menu) View() string {
 
 	var items string
 	for i, item := range menuItems {
+		num := fmt.Sprintf("%d. ", i+1)
 		cursor := "  "
-		label := itemStyle.Render(item.label)
+		label := itemStyle.Render(num + item.label)
 		if i == m.cursor {
 			cursor = cursorStyle.Render("❯ ")
-			label = cursorStyle.Render(item.label)
+			label = cursorStyle.Render(num + item.label)
 		}
 		items += "\n" + cursor + label
 		if i == m.cursor {
@@ -123,7 +136,7 @@ func (m *Menu) View() string {
 		}
 	}
 
-	help := "\n\n" + StyleHelp.Render("  ↑/k up  ↓/j down  enter select  q quit")
+	help := "\n\n" + StyleHelp.Render("  ↑/k up  ↓/j down  1-8 jump  enter select  q quit")
 
 	return title + banner + "\n" + status + "\n" + items + help
 }

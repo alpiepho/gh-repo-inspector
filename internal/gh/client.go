@@ -123,6 +123,21 @@ func DeleteRepo(fullName string, dryRun bool) error {
 	return nil
 }
 
+// SetPublic changes a repository's visibility to public.
+// In dry-run mode it returns nil without acting.
+func SetPublic(fullName string, dryRun bool) error {
+	if dryRun {
+		return nil
+	}
+	cmd := exec.Command("gh", "repo", "edit", fullName,
+		"--visibility", "public",
+		"--accept-visibility-change-consequences")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("gh repo edit: %s: %w", out, err)
+	}
+	return nil
+}
+
 // SetPrivate changes a repository's visibility to private.
 // In dry-run mode it returns nil without acting.
 func SetPrivate(fullName string, dryRun bool) error {
