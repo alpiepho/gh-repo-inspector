@@ -118,11 +118,11 @@ func (m *Menu) View() string {
 
 	var status string
 	if m.loading {
-		status = StyleHelp.Render("  Loading repos…")
+		status = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).PaddingLeft(2).Render("  Loading repos…")
 	} else if m.repoErr != nil {
 		status = StyleErrorBanner.Render(fmt.Sprintf("Error: %v", m.repoErr))
 	} else {
-		status = StyleHelp.Render(fmt.Sprintf("  %d repos loaded", len(m.repos)))
+		status = lipgloss.NewStyle().Foreground(lipgloss.Color("82")).PaddingLeft(2).Render(fmt.Sprintf("  %d repos loaded", len(m.repos)))
 	}
 
 	itemStyle := lipgloss.NewStyle().Padding(0, 2)
