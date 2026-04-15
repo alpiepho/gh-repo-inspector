@@ -224,10 +224,12 @@ func PullRepo(ctx context.Context, dir string, dryRun bool) error {
 	return nil
 }
 // PushToRemote adds (or updates) a remote named "gitlab" in the local repo at
-// localDir and pushes all branches to remoteURL.
+// localDir and pushes all branches to remoteURL (which may contain embedded credentials).
+// After a successful push the remote URL is replaced with cleanURL (no credentials)
+// so the PAT is not persisted in .git/config.
 // In dry-run mode it prints the commands without executing them.
-func PushToRemote(ctx context.Context, localDir, remoteURL string, force, dryRun bool) (string, error) {
-	// Build the command string for display.
+func PushToRemote(ctx context.Context, localDir, remoteURL, cleanURL string, force, dryRun bool) (string, error) {
+	// Build the command string for display (use clean URL so token is never shown).
 	pushArgs := []string{"-C", localDir, "push", "--all", "gitlab"}
 	if force {
 		pushArgs = append(pushArgs, "--force")
@@ -238,7 +240,7 @@ func PushToRemote(ctx context.Context, localDir, remoteURL string, force, dryRun
 		return "[dry-run] " + cmdStr, nil
 	}
 
-	// Set or add the remote.
+	// Set or add the remote using the credential URL for the push.
 	setURL := exec.CommandContext(ctx, "git", "-C", localDir, "remote", "set-url", "gitlab", remoteURL)
 	if out, err := setURL.CombinedOutput(); err != nil {
 		// remote doesn't exist yet — add it
@@ -252,6 +254,14 @@ func PushToRemote(ctx context.Context, localDir, remoteURL string, force, dryRun
 	if out, err := push.CombinedOutput(); err != nil {
 		return cmdStr, fmt.Errorf("%s: %w", strings.TrimSpace(string(out)), err)
 	}
+
+	// Strip credentials from the saved remote URL.
+	stripURL := exec.CommandContext(ctx, "git", "-C", localDir, "remote", "set-url", "gitlab", cleanURL)
+	if out, err := stripURL.CombinedOutput(); err != nil {
+		// Non-fatal: push succeeded; just log it.
+		return cmdStr, fmt.Errorf("push ok but could not strip token from remote: %s: %w", out, err)
+	}
+
 	return cmdStr, nil
 }
 

@@ -479,8 +479,9 @@ func (mv *MigrateView) pushOne(idx int) tea.Cmd {
 			}
 		}
 		remoteURL = gl.RepoHTTPURL(username, r.Name)
+		cleanURL := gl.CleanRepoURL(username, r.Name)
 
-		cmdStr, err := gh.PushToRemote(ctx, r.Path, remoteURL, force, dryRun)
+		cmdStr, err := gh.PushToRemote(ctx, r.Path, remoteURL, cleanURL, force, dryRun)
 		if err != nil {
 			oplog.Write("GITLAB-PUSH", r.Name, fmt.Sprintf("push error: %v", err))
 			return migratePushMsg{
