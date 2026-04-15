@@ -142,19 +142,45 @@ gh-repo-inspector [--dry-run | -n]
 
 Option 9 pushes locally cloned repos to a self-hosted GitLab.
 
-### Steps
-1. Open your GitLab in a browser (e.g. `http://10.0.0.60:8929`)
-2. Click your avatar (top-right) → **Edit profile** → **Access Tokens**
-3. Create a new token with scopes: **`api`** and **`write_repository`**
-4. Copy the token
-5. Open the app, press **9**, and paste the token into the config screen
-6. The app fetches your GitLab username automatically and uses it as the push namespace
+### Generating a Personal Access Token (PAT)
+
+1. Open your GitLab instance in a browser (e.g. `http://10.0.0.60:8929`)
+2. Click your **avatar** (top-right corner)
+3. Go to **Edit profile** → **Access Tokens** (left sidebar)
+4. Click **Add new token**
+5. Give it a name (e.g. `gh-repo-inspector`) and an expiry date
+6. Check these two scopes:
+   - ✅ `api` — needed to create repos and look up your username
+   - ✅ `write_repository` — needed to push code
+7. Click **Create personal access token**
+8. **Copy the token immediately** — GitLab only shows it once
+
+### First-time configuration in the app
+
+1. Press **9** on the main menu
+2. Enter your GitLab URL (e.g. `http://10.0.0.60:8929`) and press `Enter`
+3. Press `Tab` to move to the token field, paste your PAT, and press `Enter`
+4. The settings are saved to `state.json` next to the binary — you won't be prompted again
+
+### What is stored locally
+
+Both `state.json` and `operations.log` are written to the **same directory you run the binary from**. Neither file is tracked by git (both are in `.gitignore`).
+
+| File | Contents |
+|------|----------|
+| `state.json` | Last clone path, clone history, GitLab URL and PAT |
+| `operations.log` | Timestamped log of all mutating operations |
+
+> **Security note:** The PAT is stored in plaintext in `state.json`. Keep this file private
+> and do not commit it. For a personal local tool on a trusted machine this is acceptable,
+> but be aware of the risk if others have access to your filesystem.
 
 ### What happens during migration
+
 - The app scans a local directory you choose for git repos (`.git` folders)
 - You multi-select which repos to push
-- If any already exist on GitLab, you are prompted per-repo to **skip** or **force push**
-- Each repo is created on GitLab (if new), a `gitlab` remote is added locally, and `git push --all` is run
+- If any already exist on GitLab, you are prompted per-repo to **skip** (`s`) or **force push** (`f`)
+- Each new repo is created on GitLab automatically, a `gitlab` remote is added to the local clone, and `git push --all` is run
 - Credentials are embedded in the remote URL using your PAT so no password prompts appear
 - All results are logged to `operations.log`
 
