@@ -18,3 +18,6 @@ operations.log
 # Runtime state (saved clone path & history)
 state.json
 operations.log
+
+.env
+

@@ -105,7 +105,7 @@ func (m *Menu) selectItem() tea.Cmd {
 	case 7: // Test setup
 		return PushScreen(NewTestSetup(m.app))
 	case 8: // Migrate to GitLab
-		return PushScreen(NewMigrateView(m.app))
+		return PushScreen(NewMigrateView(m.app, m.repos))
 	}
 	return nil
 }

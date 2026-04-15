@@ -79,6 +79,9 @@ type MigrateView struct {
 	currentCmd   string
 	configErr    string
 
+	// ghRepos maps repo name → IsPrivate for visibility mirroring.
+	ghRepos map[string]bool
+
 	selectMenuOpen bool
 	selectMenuCur  int
 }
@@ -93,11 +96,16 @@ var migrateSelectOptions = []migrateSelectOption{
 	{"Clear selection", nil},
 }
 
-func NewMigrateView(app *App) *MigrateView {
+func NewMigrateView(app *App, ghRepoList []gh.Repo) *MigrateView {
 	cfg, _ := config.Load()
 	dir, _ := os.UserHomeDir()
 	if cfg.LastClonePath != "" {
 		dir = cfg.LastClonePath
+	}
+	// Build name → isPrivate lookup from GitHub repo list.
+	ghMap := make(map[string]bool, len(ghRepoList))
+	for _, r := range ghRepoList {
+		ghMap[r.Name] = r.IsPrivate
 	}
 	return &MigrateView{
 		app:            app,
@@ -109,6 +117,7 @@ func NewMigrateView(app *App) *MigrateView {
 		scanDir:        dir,
 		selected:       make(map[int]bool),
 		forceDecisions: make(map[string]bool),
+		ghRepos:        ghMap,
 		height:         app.height,
 	}
 }
@@ -438,6 +447,7 @@ func (mv *MigrateView) pushOne(idx int) tea.Cmd {
 	dryRun := mv.app.DryRun
 	glURL := mv.gitLabURL
 	glToken := mv.gitLabToken
+	isPrivate := mv.ghRepos[r.Name] // false (public) if not found in GitHub list
 	next := idx + 1
 
 	return func() tea.Msg {
@@ -459,7 +469,7 @@ func (mv *MigrateView) pushOne(idx int) tea.Cmd {
 		_, exists, _ := gl.CheckRepo(username, r.Name)
 		var remoteURL string
 		if !exists {
-			created, err := gl.CreateRepo(r.Name, "", false)
+			_, err := gl.CreateRepo(r.Name, "", isPrivate)
 			if err != nil {
 				oplog.Write("GITLAB-PUSH", r.Name, fmt.Sprintf("create failed: %v", err))
 				return migratePushMsg{
@@ -467,12 +477,8 @@ func (mv *MigrateView) pushOne(idx int) tea.Cmd {
 					nextIdx: next,
 				}
 			}
-			// Use token-embedded URL for push auth.
-			remoteURL = gl.RepoHTTPURL(username, r.Name)
-			_ = created
-		} else {
-			remoteURL = gl.RepoHTTPURL(username, r.Name)
 		}
+		remoteURL = gl.RepoHTTPURL(username, r.Name)
 
 		cmdStr, err := gh.PushToRemote(ctx, r.Path, remoteURL, force, dryRun)
 		if err != nil {
@@ -483,7 +489,11 @@ func (mv *MigrateView) pushOne(idx int) tea.Cmd {
 			}
 		}
 		oplog.Write("GITLAB-PUSH", r.Name, "ok → "+remoteURL)
-		label := fmt.Sprintf("✓ %s  →  %s/%s", r.Name, glURL, username)
+		visibility := "public"
+		if isPrivate {
+			visibility = "private"
+		}
+		label := fmt.Sprintf("✓ %s  →  %s/%s  (%s)", r.Name, glURL, username, visibility)
 		if dryRun {
 			label = "[DRY RUN] " + cmdStr
 		}
